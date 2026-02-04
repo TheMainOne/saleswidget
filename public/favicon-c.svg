@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17121b"/>
+      <stop offset="1" stop-color="#070609"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="32" cy="20" r="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2a1b2d" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accentBolt" x1="20" y1="12" x2="44" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff5ccf"/>
+      <stop offset="0.5" stop-color="#ff2fae"/>
+      <stop offset="1" stop-color="#d11484"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <rect x="4.5" y="4.5" width="55" height="55" rx="12" fill="none" stroke="#ff5ccf" stroke-opacity="0.35"/>
+  <rect width="64" height="64" rx="14" fill="url(#vignette)"/>
+
+  <path d="M26 11h12l-4 14h10L25 53l5-18h-9z" fill="url(#accentBolt)"/>
+  <path d="M26 11h12l-4 14h10L25 53l5-18h-9z" fill="none" stroke="#ff9de3" stroke-opacity="0.35" stroke-width="0.9"/>
+
+  <circle cx="15" cy="15" r="1.9" fill="#ff7bd9"/>
+  <circle cx="49" cy="49" r="1.9" fill="#ff7bd9"/>
+</svg>

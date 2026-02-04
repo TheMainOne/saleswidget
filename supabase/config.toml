@@ -1,0 +1,37 @@
+project_id = "llvavkoygojilyucvntv"
+
+[functions.chat-completion]
+verify_jwt = false
+
+[functions.process-document]
+verify_jwt = true
+
+[functions.get-chat-history]
+verify_jwt = false
+
+[functions.grant-client-access]
+verify_jwt = true
+
+[functions.get-client-users]
+verify_jwt = true
+
+[functions.revoke-client-access]
+verify_jwt = true
+
+[functions.get-analytics]
+verify_jwt = true
+
+[functions.get-session-history]
+verify_jwt = true
+
+[functions.get-knowledge-gaps]
+verify_jwt = true
+
+[functions.get-all-users]
+verify_jwt = true
+
+[functions.add-user-role]
+verify_jwt = true
+
+[functions.remove-user-role]
+verify_jwt = true
