@@ -95,6 +95,11 @@ const isEndpointMismatchError = (error: unknown) => {
   return /status 400|status 404|status 405|not found|method not allowed/i.test(error.message);
 };
 
+const isRoleAlreadyAssignedError = (error: unknown) => {
+  if (!(error instanceof Error)) return false;
+  return /already.*(role|admin)|role.*already|duplicate/i.test(error.message);
+};
+
 const parseUsersPayload = (payload: any): UserWithRole[] => {
   const candidates = [
     payload?.users,
@@ -533,6 +538,28 @@ const Admin = () => {
   const getSiteLabel = (siteId: string) =>
     siteLabelById.get(normalizeSiteId(siteId)) || siteId;
 
+  const promoteUserToAdmin = async (user: UserWithRole) => {
+    if (user.role === "admin" || user.role === "superadmin") return;
+    const userId = String(user.user_id || "").trim();
+    if (!userId) {
+      throw new Error("Cannot promote user to admin: missing user id.");
+    }
+
+    try {
+      await apiFetch(`/api/users/${encodeURIComponent(userId)}/roles`, {
+        method: "PATCH",
+        body: {
+          roles: ["admin"],
+        },
+      });
+    } catch (error) {
+      if (isRoleAlreadyAssignedError(error)) {
+        return;
+      }
+      throw error;
+    }
+  };
+
   const executeUserSiteUpdate = async (params: {
     userId: string;
     siteId: string;
@@ -629,6 +656,7 @@ const Admin = () => {
     }
 
     const nextSiteIds = toUniqueSiteIds([...user.sites, selectedSite]);
+    const shouldPromoteToAdmin = user.role === "user";
     setSiteUpdateByUserId((prev) => ({ ...prev, [user.user_id]: true }));
 
     try {
@@ -639,9 +667,25 @@ const Admin = () => {
         action: "add",
       });
 
+      let roleUpdateError: Error | null = null;
+      if (shouldPromoteToAdmin) {
+        try {
+          await promoteUserToAdmin(user);
+        } catch (error) {
+          roleUpdateError = error instanceof Error
+            ? error
+            : new Error("Site was assigned, but role update failed.");
+        }
+      }
+
       toast({
-        title: "Success",
-        description: `Site ${selectedSite} assigned to ${user.email}`,
+        title: roleUpdateError ? "Site assigned, role update failed" : "Success",
+        description: roleUpdateError
+          ? roleUpdateError.message
+          : shouldPromoteToAdmin
+            ? `Site ${selectedSite} assigned to ${user.email}. Role updated to admin.`
+            : `Site ${selectedSite} assigned to ${user.email}`,
+        variant: roleUpdateError ? "destructive" : "default",
       });
 
       setSiteSelectionByUserId((prev) => ({ ...prev, [user.user_id]: "" }));
