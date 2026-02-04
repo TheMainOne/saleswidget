@@ -115,7 +115,7 @@ const parseUsersPayload = (payload: any): UserWithRole[] => {
 
   return source
     .map((item) => ({
-      user_id: String(item?.user_id || item?.userId || item?.id || ""),
+      user_id: String(item?.user_id || item?.userId || item?._id || item?.id || ""),
       email: String(item?.email || ""),
       role: resolveUserRole(item),
       sites: toUniqueSiteIds([
@@ -562,64 +562,29 @@ const Admin = () => {
 
   const executeUserSiteUpdate = async (params: {
     userId: string;
-    siteId: string;
     nextSiteIds: string[];
-    action: "add" | "remove";
   }) => {
-    const { userId, siteId, nextSiteIds, action } = params;
+    const userId = String(params.userId || "").trim();
+    if (!userId) {
+      throw new Error("Cannot update sites: missing user id.");
+    }
 
-    if (action === "add") {
+    const sitesPayload = toUniqueSiteIds(params.nextSiteIds).map((siteId) => {
       const siteMeta = siteMetaById.get(normalizeSiteId(siteId));
-      await apiFetch(`/api/users/${encodeURIComponent(userId)}/sites`, {
-        method: "PATCH",
-        body: {
-          add: [
-            {
-              siteId,
-              clientId: siteMeta?.clientId || null,
-              role: "editor",
-              isActive: true,
-            },
-          ],
-        },
-      });
-      return;
-    }
+      return {
+        siteId,
+        ...(siteMeta?.clientId ? { clientId: siteMeta.clientId } : {}),
+        role: "editor",
+        isActive: true,
+      };
+    });
 
-    const preferredMethod: "POST" | "DELETE" = action === "remove" ? "DELETE" : "POST";
-    const attempts: Array<{
-      path: string;
-      method: "POST" | "PUT" | "PATCH" | "DELETE";
-      body: Record<string, unknown>;
-    }> = [
-      { path: "/api/users/sites", method: preferredMethod, body: { userId, siteId } },
-      { path: "/api/users/sites", method: "POST", body: { userId, siteId, action } },
-      { path: "/api/users/site", method: preferredMethod, body: { userId, siteId } },
-      { path: "/api/users/site", method: "POST", body: { userId, siteId, action } },
-      { path: `/api/users/${encodeURIComponent(userId)}/sites`, method: "PUT", body: { sites: nextSiteIds } },
-      { path: `/api/users/${encodeURIComponent(userId)}/sites`, method: "PATCH", body: { sites: nextSiteIds } },
-      { path: "/api/users", method: "PATCH", body: { userId, sites: nextSiteIds } },
-      { path: "/api/users", method: "PUT", body: { userId, sites: nextSiteIds } },
-    ];
-
-    let lastError: unknown = null;
-    for (const attempt of attempts) {
-      try {
-        await apiFetch(attempt.path, {
-          method: attempt.method,
-          body: attempt.body,
-        });
-        return;
-      } catch (error) {
-        if (isEndpointMismatchError(error)) {
-          lastError = error;
-          continue;
-        }
-        throw error;
-      }
-    }
-
-    throw lastError || new Error("Could not update user sites with available API endpoints.");
+    await apiFetch(`/api/users/${encodeURIComponent(userId)}/sites`, {
+      method: "PATCH",
+      body: {
+        sites: sitesPayload,
+      },
+    });
   };
 
   const handleAddSiteToUser = async (user: UserWithRole) => {
@@ -662,9 +627,7 @@ const Admin = () => {
     try {
       await executeUserSiteUpdate({
         userId: user.user_id,
-        siteId: selectedSite,
         nextSiteIds,
-        action: "add",
       });
 
       let roleUpdateError: Error | null = null;
@@ -711,9 +674,7 @@ const Admin = () => {
     try {
       await executeUserSiteUpdate({
         userId: user.user_id,
-        siteId,
         nextSiteIds,
-        action: "remove",
       });
 
       toast({
