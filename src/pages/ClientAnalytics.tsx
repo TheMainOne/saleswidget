@@ -203,7 +203,15 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
     const loadWorldMap = async () => {
       try {
         setLoadingWorldMap(true);
-        const response = await fetch("/world-countries-110m.geojson", { cache: "force-cache" });
+        const baseUrl = import.meta.env.BASE_URL || "/";
+        const worldMapPath = `${baseUrl.replace(/\/?$/, "/")}world-countries-110m.geojson`;
+
+        let response = await fetch(worldMapPath, { cache: "force-cache" });
+        // Fallback for environments where assets are served from domain root.
+        if (!response.ok && worldMapPath !== "/world-countries-110m.geojson") {
+          response = await fetch("/world-countries-110m.geojson", { cache: "force-cache" });
+        }
+
         if (!response.ok) {
           throw new Error(`World map request failed with status ${response.status}`);
         }
