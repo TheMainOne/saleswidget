@@ -41,8 +41,8 @@ const Auth = () => {
   }, [authReason]);
 
   const checkRoleAndRedirect = useCallback(async (userInfo: AuthUser, preferredPath?: string | null) => {
-    // Prevent redirect loops
-    if (window.location.pathname !== '/auth') return;
+    // Keep redirects scoped to auth route; use router pathname (basename-safe).
+    if (!location.pathname.startsWith("/auth")) return;
 
     if (userInfo.isActive === false) {
       toast({
@@ -115,7 +115,7 @@ const Auth = () => {
       description: "Your account is valid, but no role/client access is assigned yet. Contact administrator.",
       variant: "destructive",
     });
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   const resolveUserForRedirect = useCallback(async (fallbackUser: AuthUser): Promise<AuthUser> => {
     try {
