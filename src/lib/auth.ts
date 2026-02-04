@@ -24,6 +24,14 @@ interface AuthResponse {
   tokens: AuthTokens;
 }
 
+function normalizeAuthResponse(data: any): AuthResponse {
+  return {
+    ...data,
+    user: normalizeAuthUser(data?.user ?? data),
+    tokens: data?.tokens,
+  } as AuthResponse;
+}
+
 function pickUserPayload(payload: any): any {
   if (!payload || typeof payload !== "object") return payload;
   if (payload.user && typeof payload.user === "object") return payload.user;
@@ -62,11 +70,7 @@ export async function register(payload: {
     tokenStore.setTokens(data.tokens);
   }
 
-  return {
-    ...data,
-    user: normalizeAuthUser(data?.user ?? data),
-    tokens: data?.tokens,
-  } as AuthResponse;
+  return normalizeAuthResponse(data);
 }
 
 export async function login(payload: {
@@ -83,11 +87,23 @@ export async function login(payload: {
     tokenStore.setTokens(data.tokens);
   }
 
-  return {
-    ...data,
-    user: normalizeAuthUser(data?.user ?? data),
-    tokens: data?.tokens,
-  } as AuthResponse;
+  return normalizeAuthResponse(data);
+}
+
+export async function loginWithGoogle(payload: {
+  idToken: string;
+}): Promise<AuthResponse> {
+  const data = await apiFetch<any>("/api/auth/google", {
+    method: "POST",
+    body: payload,
+    skipAuth: true
+  });
+
+  if (data?.tokens) {
+    tokenStore.setTokens(data.tokens);
+  }
+
+  return normalizeAuthResponse(data);
 }
 
 export async function logout(): Promise<void> {
@@ -257,6 +273,7 @@ export function buildAuthPath(options?: {
 export const auth = {
   register,
   login,
+  loginWithGoogle,
   logout,
   getMe,
   getAccessToken: tokenStore.getAccessToken,
