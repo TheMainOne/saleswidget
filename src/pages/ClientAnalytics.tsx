@@ -26,6 +26,7 @@ interface ChatSession {
   last_message_at?: string;
   message_count: number;
   ip_address?: string;
+  country?: string | null;
   first_message: string;
   had_knowledge_gaps?: boolean;
 }
@@ -265,6 +266,7 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
         created_at: s.startedAt,
         last_message_at: s.endedAt,
         message_count: s.messagesCount || 0,
+        country: typeof s.country === "string" ? s.country : null,
         first_message: s.lastUserQuestion || "Empty conversation",
         had_knowledge_gaps: false,
       }));
@@ -497,6 +499,26 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
   const formatShortDate = (dateString: string) => {
     const date = new Date(dateString);
     return format(date, "dd.MM HH:mm");
+  };
+
+  const formatSessionCountry = (value: string | null | undefined) => {
+    const raw = typeof value === "string" ? value.trim() : "";
+    if (!raw) return "";
+
+    // Backend currently sends timezone-like strings (e.g. America/Vancouver).
+    // Show them as a readable location label in the chat list.
+    if (!raw.includes("/")) return raw;
+
+    const parts = raw
+      .split("/")
+      .filter(Boolean)
+      .map((part) => part.replace(/_/g, " "));
+
+    if (parts.length <= 1) return parts[0] || raw;
+
+    const city = parts[parts.length - 1];
+    const region = parts.slice(0, -1).join(" / ");
+    return `${city} (${region})`;
   };
 
   const formatVisitLocation = (event: TelemetryEvent) => {
@@ -828,35 +850,47 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                   <p className="text-muted-foreground text-center py-8 px-4">No chat sessions yet</p>
                 ) : (
                   <div className="divide-y divide-border/50">
-                    {sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        onClick={() => {
-                          setSelectedLead(null);
-                          viewSessionHistory(session.id);
-                        }}
-                        className={cn(
-                          "p-4 cursor-pointer transition-all",
-                          selectedSession === session.id && !selectedLead
-                            ? "bg-gradient-to-r from-primary/20 to-primary/10 border-l-2 border-l-primary" 
-                            : "hover:bg-accent/50"
-                        )}
-                      >
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                          <span>{formatShortDate(session.created_at)}</span>
-                          <span className="text-muted-foreground/50">•</span>
-                          <span>{session.message_count} msgs</span>
-                          {session.had_knowledge_gaps && (
-                            <Badge variant="destructive" className="text-xs h-4 px-1">
-                              ⚠️
-                            </Badge>
+                    {sessions.map((session) => {
+                      const sessionCountry = formatSessionCountry(session.country);
+
+                      return (
+                        <div
+                          key={session.id}
+                          onClick={() => {
+                            setSelectedLead(null);
+                            viewSessionHistory(session.id);
+                          }}
+                          className={cn(
+                            "p-4 cursor-pointer transition-all",
+                            selectedSession === session.id && !selectedLead
+                              ? "bg-gradient-to-r from-primary/20 to-primary/10 border-l-2 border-l-primary" 
+                              : "hover:bg-accent/50"
                           )}
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{formatShortDate(session.created_at)}</span>
+                              <span className="text-muted-foreground/50">•</span>
+                              <span>{session.message_count} msgs</span>
+                              {session.had_knowledge_gaps && (
+                                <Badge variant="destructive" className="text-xs h-4 px-1">
+                                  ⚠️
+                                </Badge>
+                              )}
+                            </div>
+                            {sessionCountry && (
+                              <div className="inline-flex max-w-[48%] items-center gap-1 rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                                <Globe className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{sessionCountry}</span>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-sm line-clamp-2">
+                            {session.first_message || "Empty conversation"}
+                          </p>
                         </div>
-                        <p className="text-sm line-clamp-2">
-                          {session.first_message || "Empty conversation"}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )
               ) : activeTab === "gaps" ? (
