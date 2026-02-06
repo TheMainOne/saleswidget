@@ -987,13 +987,13 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                           className={cn(
                             "group p-4 cursor-pointer transition-all",
                             selectedSession === session.id && !selectedLead
-                              ? "bg-gradient-to-r from-primary/20 to-primary/10 border-l-2 border-l-primary" 
+                              ? "bg-gradient-to-r from-primary/20 to-primary/10 border-l-2 border-l-primary"
                               : "hover:bg-accent/50",
                             deletingSessionId === session.id && "pointer-events-none opacity-70"
                           )}
                         >
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="mb-1 flex items-start justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <span>{formatShortDate(session.created_at)}</span>
                               <span className="text-muted-foreground/50">•</span>
                               <span>{session.message_count} msgs</span>
@@ -1003,18 +1003,12 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                                 </Badge>
                               )}
                             </div>
-                            <div className="flex items-center gap-1">
-                              {sessionCountry && (
-                                <div className="inline-flex max-w-[48%] items-center gap-1 rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                                  <Globe className="h-3 w-3 shrink-0" />
-                                  <span className="truncate">{sessionCountry}</span>
-                                </div>
-                              )}
+                            <div className="ml-auto flex items-center gap-2">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 rounded-full text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                                className="h-8 w-8 rounded-full text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   setSessionPendingDelete(session);
@@ -1023,16 +1017,22 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                                 title="Delete chat"
                               >
                                 {deletingSessionId === session.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Trash2 className="h-4 w-4" />
                                 )}
                               </Button>
                             </div>
                           </div>
-                          <p className="text-sm line-clamp-2">
+                          <p className="line-clamp-2 text-sm">
                             {session.first_message || "Empty conversation"}
                           </p>
+                          {sessionCountry && (
+                            <div className="mt-2 inline-flex max-w-full items-start gap-1 rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                              <Globe className="mt-0.5 h-3 w-3 shrink-0" />
+                              <span className="break-words leading-relaxed">{sessionCountry}</span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
