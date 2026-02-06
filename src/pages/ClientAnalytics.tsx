@@ -195,6 +195,8 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
   const [refreshing, setRefreshing] = useState(false);
   const [leadPendingDelete, setLeadPendingDelete] = useState<Lead | null>(null);
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [sessionPendingDelete, setSessionPendingDelete] = useState<ChatSession | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -719,6 +721,83 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
     }
   };
 
+  const handleDeleteSession = async () => {
+    const targetSession = sessionPendingDelete;
+    if (!targetSession) return;
+
+    const sessionId = String(targetSession.id || "").trim();
+    if (!sessionId) {
+      toast.error("This chat cannot be deleted because sessionId is missing.");
+      return;
+    }
+
+    try {
+      setDeletingSessionId(sessionId);
+      const response = await apiFetch<any>(`/api/statistic/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+      });
+
+      const deletedMessagesRaw = Number(
+        response?.deletedMessages ??
+          response?.messagesDeleted ??
+          response?.deleted_messages ??
+          response?.messages
+      );
+      const deletedSessionsRaw = Number(
+        response?.deletedSessions ??
+          response?.sessionsDeleted ??
+          response?.deleted_sessions ??
+          response?.sessions
+      );
+
+      const removedMessages = Number.isFinite(deletedMessagesRaw)
+        ? Math.max(0, deletedMessagesRaw)
+        : Math.max(0, Number(targetSession.message_count || 0));
+      const removedSessions = Number.isFinite(deletedSessionsRaw)
+        ? Math.max(1, deletedSessionsRaw)
+        : 1;
+
+      setSessions((prev) => prev.filter((session) => session.id !== sessionId));
+      setKnowledgeGaps((prev) => prev.filter((gap) => gap.session_id !== sessionId));
+
+      if (selectedSession === sessionId) {
+        setSelectedSession(null);
+        setSessionMessages([]);
+      }
+
+      if (selectedLead?.session_id === sessionId) {
+        setSessionMessages([]);
+      }
+
+      setStats((prev) => {
+        if (!prev) return prev;
+
+        const nextTotalSessions = Math.max(0, prev.totalSessions - removedSessions);
+        const nextTotalMessages = Math.max(0, prev.totalMessages - removedMessages);
+
+        return {
+          ...prev,
+          totalSessions: nextTotalSessions,
+          totalMessages: nextTotalMessages,
+          averageMessagesPerSession:
+            nextTotalSessions > 0 ? Number((nextTotalMessages / nextTotalSessions).toFixed(1)) : 0,
+        };
+      });
+
+      setSessionPendingDelete(null);
+      toast.success(
+        removedMessages > 0
+          ? `Chat deleted (${removedMessages} messages removed)`
+          : "Chat deleted"
+      );
+    } catch (error: any) {
+      console.error("Error deleting chat session:", error);
+      toast.error(error?.message || "Failed to delete chat");
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[260px] items-center justify-center p-8 lg:h-[calc(100vh-200px)]">
@@ -906,10 +985,11 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                             viewSessionHistory(session.id);
                           }}
                           className={cn(
-                            "p-4 cursor-pointer transition-all",
+                            "group p-4 cursor-pointer transition-all",
                             selectedSession === session.id && !selectedLead
                               ? "bg-gradient-to-r from-primary/20 to-primary/10 border-l-2 border-l-primary" 
-                              : "hover:bg-accent/50"
+                              : "hover:bg-accent/50",
+                            deletingSessionId === session.id && "pointer-events-none opacity-70"
                           )}
                         >
                           <div className="mb-1 flex items-center justify-between gap-2">
@@ -923,12 +1003,32 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                                 </Badge>
                               )}
                             </div>
-                            {sessionCountry && (
-                              <div className="inline-flex max-w-[48%] items-center gap-1 rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                                <Globe className="h-3 w-3 shrink-0" />
-                                <span className="truncate">{sessionCountry}</span>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {sessionCountry && (
+                                <div className="inline-flex max-w-[48%] items-center gap-1 rounded-full border border-border/60 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                                  <Globe className="h-3 w-3 shrink-0" />
+                                  <span className="truncate">{sessionCountry}</span>
+                                </div>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-full text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSessionPendingDelete(session);
+                                }}
+                                disabled={!!deletingSessionId || !!deletingLeadId}
+                                title="Delete chat"
+                              >
+                                {deletingSessionId === session.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
                           <p className="text-sm line-clamp-2">
                             {session.first_message || "Empty conversation"}
@@ -1494,6 +1594,53 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
               Delete lead
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!sessionPendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deletingSessionId) {
+            setSessionPendingDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the full chat and all messages in this session.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {sessionPendingDelete && (
+            <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+              <p className="text-sm font-medium">Session: {sessionPendingDelete.id}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Started: {formatDate(sessionPendingDelete.created_at)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Messages: {sessionPendingDelete.message_count}
+              </p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingSessionId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!sessionPendingDelete || !!deletingSessionId}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteSession();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingSessionId ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete chat
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
