@@ -6,11 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Users, TrendingUp, AlertTriangle, CheckCircle, CalendarIcon, X, UserCheck, Mail, Building2, Phone, AtSign, Globe, Monitor, Smartphone, Tablet, RefreshCw, Search, Share2, Link2, ExternalLink } from "lucide-react";
+import { MessageSquare, Users, TrendingUp, AlertTriangle, CheckCircle, CalendarIcon, X, UserCheck, Mail, Building2, Phone, AtSign, Globe, Monitor, Smartphone, Tablet, RefreshCw, Search, Share2, Link2, ExternalLink, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AnalyticsStats {
   totalSessions: number;
@@ -183,6 +193,8 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
   const [worldMapFeatures, setWorldMapFeatures] = useState<WorldCountryFeature[]>([]);
   const [loadingWorldMap, setLoadingWorldMap] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [leadPendingDelete, setLeadPendingDelete] = useState<Lead | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -674,6 +686,39 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
     }
   };
 
+  const handleDeleteLead = async () => {
+    const targetLead = leadPendingDelete;
+    if (!targetLead) return;
+
+    const leadId = String(targetLead.id || "").trim();
+    if (!leadId) {
+      toast.error("This lead cannot be deleted because ID is missing.");
+      return;
+    }
+
+    try {
+      setDeletingLeadId(leadId);
+      await apiFetch(`/api/leads/${encodeURIComponent(leadId)}`, {
+        method: "DELETE",
+      });
+
+      setLeads((prev) => prev.filter((lead) => lead.id !== leadId));
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(null);
+        setSelectedSession(null);
+        setSessionMessages([]);
+      }
+
+      setLeadPendingDelete(null);
+      toast.success("Lead deleted");
+    } catch (error: any) {
+      console.error("Error deleting lead:", error);
+      toast.error(error?.message || "Failed to delete lead");
+    } finally {
+      setDeletingLeadId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[260px] items-center justify-center p-8 lg:h-[calc(100vh-200px)]">
@@ -982,28 +1027,51 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                           }
                         }}
                         className={cn(
-                          "p-4 cursor-pointer transition-all",
+                          "group p-4 cursor-pointer transition-all",
                           selectedLead?.id === lead.id
                             ? "bg-gradient-to-r from-primary/20 to-primary/10 border-l-2 border-l-primary"
-                            : "hover:bg-accent/50"
+                            : "hover:bg-accent/50",
+                          deletingLeadId === lead.id && "pointer-events-none opacity-70"
                         )}
                       >
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="secondary" className="text-xs">
-                            {lead.request_type}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {formatShortDate(lead.created_at)}
-                          </span>
-                          {lead.session_id && (
-                            <Badge variant="outline" className="text-xs">
-                              <MessageSquare className="h-3 w-3 mr-1" />
-                              Chat
-                            </Badge>
-                          )}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {lead.request_type}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {formatShortDate(lead.created_at)}
+                              </span>
+                              {lead.session_id && (
+                                <Badge variant="outline" className="text-xs">
+                                  <MessageSquare className="h-3 w-3 mr-1" />
+                                  Chat
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="truncate text-sm font-medium">{lead.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{getPrimaryContactLabel(lead)}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setLeadPendingDelete(lead);
+                            }}
+                            disabled={!!deletingLeadId}
+                            title="Delete lead"
+                          >
+                            {deletingLeadId === lead.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
-                        <p className="text-sm font-medium">{lead.name}</p>
-                        <p className="text-xs text-muted-foreground">{getPrimaryContactLabel(lead)}</p>
                       </div>
                     ))}
                   </div>
@@ -1235,7 +1303,24 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
                         <UserCheck className="h-5 w-5 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-lg truncate">{selectedLead.name}</h3>
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="truncate text-lg font-semibold">{selectedLead.name}</h3>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setLeadPendingDelete(selectedLead)}
+                            disabled={!!deletingLeadId}
+                          >
+                            {deletingLeadId === selectedLead.id ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Delete
+                          </Button>
+                        </div>
                         <div className="flex flex-wrap gap-3 mt-2">
                           {getLeadContacts(selectedLead).map((contact, index) => (
                             <div key={`${contact.type}-${contact.value}-${index}`} className="flex items-center gap-1.5 text-sm">
@@ -1370,6 +1455,49 @@ export default function ClientAnalytics({ clientId, siteId }: ClientAnalyticsPro
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog
+        open={!!leadPendingDelete}
+        onOpenChange={(open) => {
+          if (!open && !deletingLeadId) {
+            setLeadPendingDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this lead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The lead and linked contact snapshot will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {leadPendingDelete && (
+            <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+              <p className="text-sm font-medium">{leadPendingDelete.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{getPrimaryContactLabel(leadPendingDelete)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{formatDate(leadPendingDelete.created_at)}</p>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!deletingLeadId}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!leadPendingDelete || !!deletingLeadId}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteLead();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingLeadId ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete lead
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
